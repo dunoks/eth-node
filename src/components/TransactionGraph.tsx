@@ -94,6 +94,21 @@ export function TransactionGraph({ transactions }: { transactions: Transaction[]
       .style("transition", "opacity 0.2s")
       .text(d => `${d.hash.slice(0, 4)}.. ${d.value}Ξ @ ${parseFloat(d.gasPrice).toFixed(1)}gwei`);
 
+    // Tooltip definition
+    const tooltip = d3.select("body").append("div")
+      .attr("class", "tx-graph-tooltip")
+      .style("position", "absolute")
+      .style("visibility", "hidden")
+      .style("background", "rgba(5, 5, 5, 0.95)")
+      .style("border", "1px solid #627EEA")
+      .style("color", "#627EEA")
+      .style("padding", "6px 12px")
+      .style("font-family", "JetBrains Mono")
+      .style("font-size", "10px")
+      .style("z-index", "1000")
+      .style("pointer-events", "none")
+      .style("box-shadow", "0 0 20px rgba(98, 126, 234, 0.2)");
+
     const node = svg.append("g")
       .selectAll("g")
       .data(nodes)
@@ -101,6 +116,11 @@ export function TransactionGraph({ transactions }: { transactions: Transaction[]
       .attr("class", "tx-node")
       .style("cursor", "pointer")
       .on("mouseenter", (event, d: any) => {
+        // Show tooltip
+        tooltip
+          .style("visibility", "visible")
+          .html(`ADDR: ${d.id}`);
+
         // Highlight this node
         d3.select(event.currentTarget).select("circle")
           .transition().duration(200)
@@ -127,7 +147,15 @@ export function TransactionGraph({ transactions }: { transactions: Transaction[]
           .transition().duration(200)
           .style("opacity", (l: any) => (l.source.id === d.id || l.target.id === d.id) ? 1 : 0.05);
       })
+      .on("mousemove", (event) => {
+        tooltip
+          .style("top", (event.pageY - 10) + "px")
+          .style("left", (event.pageX + 10) + "px");
+      })
       .on("mouseleave", (event) => {
+        // Hide tooltip
+        tooltip.style("visibility", "hidden");
+
         // Reset node
         d3.select(event.currentTarget).select("circle")
           .transition().duration(200)
@@ -199,7 +227,10 @@ export function TransactionGraph({ transactions }: { transactions: Transaction[]
       d.fy = null;
     }
 
-    return () => simulation.stop();
+    return () => {
+      simulation.stop();
+      tooltip.remove();
+    };
   }, [transactions]);
 
   return (
