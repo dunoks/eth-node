@@ -72,25 +72,79 @@ export function TransactionGraph({ transactions }: { transactions: Transaction[]
       .selectAll("line")
       .data(links)
       .join("line")
+      .attr("class", "tx-link")
       .attr("stroke", "rgba(98, 126, 234, 0.2)")
       .attr("stroke-width", 1.5)
-      .attr("marker-end", "url(#arrowhead)");
+      .attr("marker-end", "url(#arrowhead)")
+      .style("transition", "stroke 0.2s, stroke-opacity 0.2s");
 
     const linkLabel = svg.append("g")
       .selectAll("text")
       .data(links)
       .join("text")
+      .attr("class", "tx-label")
       .attr("fill", "#627EEA")
       .style("font-size", "8px")
       .style("font-family", "JetBrains Mono")
       .style("text-anchor", "middle")
       .style("pointer-events", "none")
+      .style("opacity", 0.6)
+      .style("transition", "opacity 0.2s")
       .text(d => `${d.hash.slice(0, 6)}... (${d.value}Ξ)`);
 
     const node = svg.append("g")
       .selectAll("g")
       .data(nodes)
       .join("g")
+      .attr("class", "tx-node")
+      .style("cursor", "pointer")
+      .on("mouseenter", (event, d: any) => {
+        // Highlight this node
+        d3.select(event.currentTarget).select("circle")
+          .transition().duration(200)
+          .attr("r", 9)
+          .attr("fill", "#627EEA");
+        
+        d3.select(event.currentTarget).select("text")
+          .transition().duration(200)
+          .attr("fill", "#ffffff")
+          .style("font-size", "11px");
+
+        // Dim other nodes
+        svg.selectAll(".tx-node").filter((n: any) => n.id !== d.id)
+          .transition().duration(200)
+          .style("opacity", 0.3);
+
+        // Highlight connected links
+        svg.selectAll(".tx-link")
+          .transition().duration(200)
+          .attr("stroke", (l: any) => (l.source.id === d.id || l.target.id === d.id) ? "rgba(98, 126, 234, 0.8)" : "rgba(255, 255, 255, 0.05)")
+          .attr("stroke-width", (l: any) => (l.source.id === d.id || l.target.id === d.id) ? 2.5 : 1);
+
+        svg.selectAll(".tx-label")
+          .transition().duration(200)
+          .style("opacity", (l: any) => (l.source.id === d.id || l.target.id === d.id) ? 1 : 0.05);
+      })
+      .on("mouseleave", (event) => {
+        // Reset node
+        d3.select(event.currentTarget).select("circle")
+          .transition().duration(200)
+          .attr("r", 6)
+          .attr("fill", "#050505");
+        
+        d3.select(event.currentTarget).select("text")
+          .transition().duration(200)
+          .attr("fill", "rgba(255, 255, 255, 0.4)")
+          .style("font-size", "10px");
+
+        // Reset all
+        svg.selectAll(".tx-node").transition().duration(200).style("opacity", 1);
+        svg.selectAll(".tx-link")
+          .transition().duration(200)
+          .attr("stroke", "rgba(98, 126, 234, 0.2)")
+          .attr("stroke-width", 1.5);
+        svg.selectAll(".tx-label").transition().duration(200).style("opacity", 0.6);
+      })
       .call(d3.drag<SVGGElement, Node>()
         .on("start", dragstarted)
         .on("drag", dragged)
@@ -100,7 +154,8 @@ export function TransactionGraph({ transactions }: { transactions: Transaction[]
       .attr("r", 6)
       .attr("fill", "#050505")
       .attr("stroke", "#627EEA")
-      .attr("stroke-width", 2);
+      .attr("stroke-width", 2)
+      .style("transition", "r 0.2s, fill 0.2s");
 
     node.append("text")
       .attr("x", 8)
