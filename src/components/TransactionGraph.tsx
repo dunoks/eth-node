@@ -67,6 +67,17 @@ export function TransactionGraph({ transactions }: { transactions: Transaction[]
       .attr("width", "100%")
       .attr("height", "100%");
 
+    // Zoom setup
+    const g = svg.append("g");
+    
+    const zoom = d3.zoom<SVGSVGElement, unknown>()
+      .scaleExtent([0.5, 5])
+      .on("zoom", (event) => {
+        g.attr("transform", event.transform);
+      });
+
+    svg.call(zoom);
+
     // Arrowhead definition
     svg.append("defs").append("marker")
       .attr("id", "arrowhead")
@@ -88,7 +99,7 @@ export function TransactionGraph({ transactions }: { transactions: Transaction[]
       .force("center", d3.forceCenter(width / 2, height / 2))
       .force("collide", d3.forceCollide(40));
 
-    const link = svg.append("g")
+    const link = g.append("g")
       .selectAll("line")
       .data(links)
       .join("line")
@@ -133,7 +144,7 @@ export function TransactionGraph({ transactions }: { transactions: Transaction[]
           .attr("stroke-width", 1.5);
       });
 
-    const linkLabel = svg.append("g")
+    const linkLabel = g.append("g")
       .selectAll("text")
       .data(links)
       .join("text")
@@ -199,7 +210,7 @@ export function TransactionGraph({ transactions }: { transactions: Transaction[]
       .style("pointer-events", "none")
       .style("box-shadow", "0 0 20px rgba(98, 126, 234, 0.2)");
 
-    const node = svg.append("g")
+    const node = g.append("g")
       .selectAll("g")
       .data(nodes)
       .join("g")
@@ -318,8 +329,8 @@ export function TransactionGraph({ transactions }: { transactions: Transaction[]
 
       node
         .attr("transform", d => {
-          // Clamp nodes to viewport boundaries
-          const r = 10;
+          // Clamp nodes to viewport boundaries with padding
+          const r = 20;
           d.x = Math.max(r, Math.min(width - r, d.x || 0));
           d.y = Math.max(r, Math.min(height - r, d.y || 0));
           return `translate(${d.x},${d.y})`;
@@ -350,8 +361,12 @@ export function TransactionGraph({ transactions }: { transactions: Transaction[]
   }, [transactions, dimensions]);
 
   return (
-    <div ref={containerRef} className="w-full h-full bg-black/20 border border-white/5 relative overflow-hidden">
-      <svg ref={svgRef} className="w-full h-full" />
+    <div ref={containerRef} className="w-full h-full bg-black/20 border border-white/5 relative overflow-hidden group">
+      <svg ref={svgRef} className="w-full h-full cursor-move" />
+      <div className="absolute top-2 left-2 flex flex-col gap-1 pointer-events-none">
+        <div className="text-[8px] font-mono text-white/40 uppercase tracking-tighter">SCROLL_TO_ZOOM</div>
+        <div className="text-[8px] font-mono text-white/40 uppercase tracking-tighter">DRAG_TO_PAN</div>
+      </div>
       <div className="absolute bottom-2 right-2 text-[8px] font-mono text-white/20 uppercase tracking-widest">
         D3_Force_Layout
       </div>
