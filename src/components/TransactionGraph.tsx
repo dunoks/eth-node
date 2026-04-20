@@ -298,7 +298,23 @@ export function TransactionGraph({ transactions }: { transactions: Transaction[]
 
       linkLabel
         .attr("x", d => ((d.source as any).x + (d.target as any).x) / 2)
-        .attr("y", d => ((d.source as any).y + (d.target as any).y) / 2 - 8);
+        .attr("y", d => ((d.source as any).y + (d.target as any).y) / 2 - 8)
+        .attr("transform", d => {
+          const x1 = (d.source as any).x;
+          const y1 = (d.source as any).y;
+          const x2 = (d.target as any).x;
+          const y2 = (d.target as any).y;
+          const dx = x2 - x1;
+          const dy = y2 - y1;
+          const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+          
+          // Normalize angle to keep text upright (reading left-to-right)
+          const normalizedAngle = (angle > 90 || angle < -90) ? angle + 180 : angle;
+          
+          const centerX = (x1 + x2) / 2;
+          const centerY = (y1 + y2) / 2;
+          return `rotate(${normalizedAngle}, ${centerX}, ${centerY})`;
+        });
 
       node
         .attr("transform", d => {
