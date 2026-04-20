@@ -97,6 +97,15 @@ export default function App() {
     consensus: 'REACHED'
   });
 
+  const nodeStatus = useMemo(() => {
+    const isCritical = metrics.peers < 15;
+    const isWarning = metrics.peers < 40 || parseFloat(healthData.syncLag) > 0.2 || parseFloat(healthData.propagation) > 30;
+    
+    if (isCritical) return 'critical';
+    if (isWarning) return 'warning';
+    return 'healthy';
+  }, [metrics.peers, healthData.syncLag, healthData.propagation]);
+
   const provider = useMemo(() => new ethers.JsonRpcProvider(RPC_URLS[rpcIndex]), [rpcIndex]);
 
   const fetchData = async () => {
@@ -291,9 +300,23 @@ export default function App() {
             {/* Left Col: Health and Stats */}
             <div className="col-span-12 md:col-span-6 lg:col-span-3 flex flex-col gap-6">
               <div className="bg-card p-6 flex flex-col rounded-none">
-                <div className="flex items-center gap-2 mb-6">
-                  <div className="accent-bar"></div>
-                  <span className="text-[11px] uppercase tracking-widest font-extrabold text-white/90">Node_Metrics</span>
+                <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center gap-2">
+                    <div className="accent-bar"></div>
+                    <span className="text-[11px] uppercase tracking-widest font-extrabold text-white/90">Node_Metrics</span>
+                  </div>
+                  <div className={`flex items-center gap-1.5 px-2 py-0.5 border font-mono text-[9px] uppercase tracking-tighter ${
+                    nodeStatus === 'healthy' ? 'border-emerald-500/30 text-emerald-500 bg-emerald-500/5' :
+                    nodeStatus === 'warning' ? 'border-amber-500/30 text-amber-500 bg-amber-500/5' :
+                    'border-rose-500/30 text-rose-500 bg-rose-500/5'
+                  }`}>
+                    <div className={`w-1 h-1 rounded-full ${
+                      nodeStatus === 'healthy' ? 'bg-emerald-500 animate-pulse-status' :
+                      nodeStatus === 'warning' ? 'bg-amber-500' :
+                      'bg-rose-500 animate-pulse'
+                    }`}></div>
+                    {nodeStatus}
+                  </div>
                 </div>
                 <div className="space-y-6">
                   <MetricRow label="CPU_LOAD" value={`${metrics.cpuUsage.toFixed(1)}%`} progress={metrics.cpuUsage / 100} />
