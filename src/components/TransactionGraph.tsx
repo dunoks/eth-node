@@ -78,7 +78,42 @@ export function TransactionGraph({ transactions }: { transactions: Transaction[]
       .attr("stroke", "rgba(98, 126, 234, 0.2)")
       .attr("stroke-width", 1.5)
       .attr("marker-end", "url(#arrowhead)")
-      .style("transition", "stroke 0.2s, stroke-opacity 0.2s");
+      .style("transition", "stroke 0.2s, stroke-opacity 0.2s")
+      .style("cursor", "crosshair")
+      .on("mouseenter", (event, d: any) => {
+        tooltip
+          .style("visibility", "visible")
+          .html(`
+            <div style="margin-bottom: 2px; opacity: 0.5;">TX_RELATIONSHIP</div>
+            <div style="font-weight: bold; margin-bottom: 4px; color: #ffffff;">${d.hash}</div>
+            <div style="display: flex; justify-content: space-between; gap: 12px; margin-bottom: 2px;">
+              <span style="opacity: 0.6;">VALUE:</span>
+              <span style="color: #627EEA;">${d.value} Ξ</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; gap: 12px; margin-bottom: 4px;">
+              <span style="opacity: 0.6;">GAS PRICE:</span>
+              <span style="color: #10b981;">${parseFloat(d.gasPrice).toFixed(2)} Gwei</span>
+            </div>
+            <div style="font-size: 8px; opacity: 0.3; border-top: 1px solid rgba(98, 126, 234, 0.2); padding-top: 4px;">EDGE_INSPECTION_MODE</div>
+          `);
+        
+        d3.select(event.currentTarget)
+          .transition().duration(200)
+          .attr("stroke", "rgba(98, 126, 234, 0.8)")
+          .attr("stroke-width", 3);
+      })
+      .on("mousemove", (event) => {
+        tooltip
+          .style("top", (event.pageY - 10) + "px")
+          .style("left", (event.pageX + 10) + "px");
+      })
+      .on("mouseleave", (event) => {
+        tooltip.style("visibility", "hidden");
+        d3.select(event.currentTarget)
+          .transition().duration(200)
+          .attr("stroke", "rgba(98, 126, 234, 0.2)")
+          .attr("stroke-width", 1.5);
+      });
 
     const linkLabel = svg.append("g")
       .selectAll("text")
@@ -92,10 +127,44 @@ export function TransactionGraph({ transactions }: { transactions: Transaction[]
       .style("font-weight", "bold")
       .style("font-family", "JetBrains Mono")
       .style("text-anchor", "middle")
-      .style("pointer-events", "none")
+      .style("cursor", "crosshair")
       .style("opacity", 0.7)
       .style("transition", "opacity 0.2s, fill 0.2s")
-      .text(d => `${d.hash.slice(0, 6)}... [${d.value} Ξ] @ ${parseFloat(d.gasPrice).toFixed(1)} gwei`);
+      .text(d => `${d.hash.slice(0, 6)}... [${d.value} Ξ] @ ${parseFloat(d.gasPrice).toFixed(1)} gwei`)
+      .on("mouseenter", (event, d: any) => {
+        tooltip
+          .style("visibility", "visible")
+          .html(`
+            <div style="margin-bottom: 2px; opacity: 0.5;">TX_RELATIONSHIP</div>
+            <div style="font-weight: bold; margin-bottom: 4px; color: #ffffff;">${d.hash}</div>
+            <div style="display: flex; justify-content: space-between; gap: 12px; margin-bottom: 2px;">
+              <span style="opacity: 0.6;">VALUE:</span>
+              <span style="color: #627EEA;">${d.value} Ξ</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; gap: 12px; margin-bottom: 4px;">
+              <span style="opacity: 0.6;">GAS PRICE:</span>
+              <span style="color: #10b981;">${parseFloat(d.gasPrice).toFixed(2)} Gwei</span>
+            </div>
+            <div style="font-size: 8px; opacity: 0.3; border-top: 1px solid rgba(98, 126, 234, 0.2); padding-top: 4px;">LABEL_INSPECTION_MODE</div>
+          `);
+        
+        d3.select(event.currentTarget)
+          .transition().duration(200)
+          .attr("fill", "#ffffff")
+          .style("opacity", 1);
+      })
+      .on("mousemove", (event) => {
+        tooltip
+          .style("top", (event.pageY - 10) + "px")
+          .style("left", (event.pageX + 10) + "px");
+      })
+      .on("mouseleave", (event) => {
+        tooltip.style("visibility", "hidden");
+        d3.select(event.currentTarget)
+          .transition().duration(200)
+          .attr("fill", "#627EEA")
+          .style("opacity", 0.7);
+      });
 
     // Tooltip definition
     const tooltip = d3.select("body").append("div")
