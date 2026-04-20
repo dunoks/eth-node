@@ -95,7 +95,7 @@ export function TransactionGraph({ transactions }: { transactions: Transaction[]
       .style("pointer-events", "none")
       .style("opacity", 0.7)
       .style("transition", "opacity 0.2s, fill 0.2s")
-      .text(d => `${d.hash.slice(0, 4)}.. ${d.value}Ξ @ ${parseFloat(d.gasPrice).toFixed(1)}g`);
+      .text(d => `${d.hash.slice(0, 6)}... [${d.value} Ξ] @ ${parseFloat(d.gasPrice).toFixed(1)} gwei`);
 
     // Tooltip definition
     const tooltip = d3.select("body").append("div")
