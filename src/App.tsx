@@ -99,6 +99,7 @@ export default function App() {
     consensus: 'REACHED'
   });
   const [modalView, setModalView] = useState<'list' | 'graph'>('list');
+  const [activeView, setActiveView] = useState<'dashboard' | 'explorer'>('dashboard');
 
   const nodeStatus = useMemo(() => {
     const isCritical = metrics.peers < 15 || parseFloat(healthData.syncLag) > 0.5 || parseFloat(healthData.propagation) > 50;
@@ -179,7 +180,7 @@ export default function App() {
       setIsModalLoading(true);
       try {
         // Fetch original block with full transactions pre-fetched
-        const fullBlock = await provider.getBlock(block.number, true);
+        const fullBlock = await provider.getBlock(block.hash, true);
         if (fullBlock && fullBlock.transactions && fullBlock.transactions.length > 0) {
           // In ethers v6, block.transactions is an array of TransactionResponse if prefetchTxs is true
           const txsToShow = fullBlock.transactions.slice(0, 10) as ethers.TransactionResponse[];
@@ -200,7 +201,7 @@ export default function App() {
           const updatedBlock = { ...block, transactions: txDetails };
           setSelectedBlock(updatedBlock);
           
-          // Update blocks list so we don't fetch again if clicked
+          // Update blocks list if it exists there
           setBlocks(prev => prev.map(b => b.number === block.number ? updatedBlock : b));
         }
       } catch (err) {
@@ -210,6 +211,35 @@ export default function App() {
       } finally {
         setIsModalLoading(false);
       }
+    }
+  };
+
+  const searchBlockInExplorer = async (query: string) => {
+    setIsModalLoading(true);
+    try {
+      let block;
+      if (query.startsWith('0x')) {
+        block = await provider.getBlock(query);
+      } else {
+        block = await provider.getBlock(parseInt(query));
+      }
+
+      if (block) {
+        const foundBlock: BlockData = {
+          number: block.number,
+          hash: block.hash || '',
+          timestamp: block.timestamp,
+          transactionsCount: block.transactions.length,
+          miner: block.miner
+        };
+        handleBlockClick(foundBlock);
+      } else {
+        setConnectionError('Block not found in ledger.');
+      }
+    } catch (err) {
+      setConnectionError('Failed to retrieve block data.');
+    } finally {
+      setIsModalLoading(false);
     }
   };
 
@@ -453,7 +483,16 @@ export default function App() {
                     <div className="accent-bar"></div>
                     <span className="text-[11px] uppercase tracking-widest font-extrabold text-white/90">Chain_Ledger.log</span>
                   </div>
-                  <span className="text-[9px] font-mono text-white/20 uppercase tracking-widest">Live Updates</span>
+                  <div className="flex items-center gap-4">
+                    <button 
+                      onClick={() => setActiveView('explorer')}
+                      className="text-[9px] font-mono p-1 px-3 border border-white/10 hover:border-eth-blue/50 hover:bg-eth-blue/5 transition-all text-white/40 hover:text-eth-blue uppercase tracking-widest flex items-center gap-2"
+                    >
+                      <Layers size={10} />
+                      Open_Explorer
+                    </button>
+                    <span className="text-[9px] font-mono text-white/20 uppercase tracking-widest">Live Updates</span>
+                  </div>
                 </div>
                 <div className="flex-1 overflow-y-auto">
                   {filteredBlocks.map((b) => (
@@ -621,6 +660,101 @@ export default function App() {
           </div>
         </section>
       </main>
+
+      {/* Dedicated Block Explorer View */}
+      <AnimatePresence>
+        {activeView === 'explorer' && (
+          <motion.div 
+            initial={{ opacity: 0, y: 100 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 100 }}
+            className="fixed inset-0 z-[60] bg-bg flex flex-col"
+          >
+            <div className="h-16 border-b border-white/10 flex items-center justify-between px-8 bg-sidebar">
+              <div className="flex items-center gap-4">
+                <div className="w-8 h-8 border border-eth-blue flex items-center justify-center text-eth-blue">
+                  <Search size={16} />
+                </div>
+                <span className="text-sm font-mono tracking-widest uppercase">Network_Explorer.sys</span>
+              </div>
+              <button 
+                onClick={() => setActiveView('dashboard')}
+                className="px-4 py-2 border border-white/10 text-[10px] font-mono uppercase tracking-widest hover:bg-white/5 transition-colors"
+              >
+                Close_Terminal
+              </button>
+            </div>
+
+            <div className="flex-1 p-12 flex flex-col gap-12 overflow-y-auto max-w-7xl mx-auto w-full">
+              <div className="text-center space-y-6 max-w-2xl mx-auto w-full">
+                <h2 className="text-4xl font-light tracking-tight">Mainnet Ledger Search</h2>
+                <p className="text-[11px] text-white/30 uppercase tracking-[0.2em] font-mono">Input block index or cryptographic hash for deep inspection</p>
+                
+                <div className="relative group">
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20 group-focus-within:text-eth-blue transition-colors" size={20} />
+                  <input 
+                    type="text" 
+                    placeholder="ENTER_HASH_OR_HEIGHT..."
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') searchBlockInExplorer((e.target as HTMLInputElement).value);
+                    }}
+                    className="w-full bg-black/40 border-2 border-white/5 rounded-none py-6 pl-14 pr-6 text-xl font-mono focus:outline-none focus:border-eth-blue/40 transition-all uppercase tracking-widest text-white shadow-2xl"
+                  />
+                  <div className="absolute right-4 top-1/2 -translate-y-1/2 text-[9px] font-mono text-white/10 group-focus-within:text-eth-blue/30">
+                    PRESS_ENTER_TO_QUERY
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap justify-center gap-4 pt-4">
+                  <span className="text-[9px] font-mono text-white/20 uppercase">Recent_Queries:</span>
+                  {blocks.slice(0, 3).map(b => (
+                    <button 
+                      key={b.hash}
+                      onClick={() => searchBlockInExplorer(b.number.toString())}
+                      className="text-[9px] font-mono text-eth-blue/50 hover:text-eth-blue uppercase border-b border-eth-blue/10"
+                    >
+                      #{b.number}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="col-span-full border-t border-white/5 pt-12">
+                   <div className="flex items-center gap-2 mb-8">
+                    <div className="accent-bar"></div>
+                    <span className="text-[11px] uppercase tracking-widest font-extrabold text-white/90">Global_Ledger_History</span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+                    {blocks.map(b => (
+                      <div 
+                        key={b.hash}
+                        onClick={() => handleBlockClick(b)}
+                        className="bg-black/40 border border-white/5 p-4 cursor-pointer hover:border-eth-blue/30 transition-all group"
+                      >
+                        <div className="text-[10px] font-mono text-white/20 mb-2">BLOCK_{b.number}</div>
+                        <div className="text-xs font-mono text-white/70 group-hover:text-eth-blue transition-colors truncate">0x{b.hash.slice(2, 10)}...</div>
+                        <div className="mt-4 flex justify-between items-center">
+                          <div className="text-[9px] font-mono text-white/20 uppercase">{b.transactionsCount} TXs</div>
+                          <ChevronRight size={14} className="text-white/10 group-hover:text-eth-blue" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <footer className="h-10 border-t border-white/10 px-8 flex items-center justify-between text-[9px] font-mono text-white/20 bg-sidebar">
+              <div className="uppercase tracking-widest">Mainnet Node Explorer Protocol v2.4</div>
+              <div className="flex items-center gap-4">
+                <span>STATUS: IDLE</span>
+                <div className="w-2 h-2 bg-emerald-500/50"></div>
+              </div>
+            </footer>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Block Transaction Detail Modal */}
       <AnimatePresence>
