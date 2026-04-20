@@ -41,12 +41,15 @@ import {
 } from 'recharts';
 import { TransactionGraph } from './components/TransactionGraph';
 
-// RPC Providers - Using a more reliable list of public endpoints
+// RPC Providers - Expanded pool for better failover resilience
 const RPC_URLS = [
   'https://eth.llamarpc.com',
   'https://rpc.ankr.com/eth',
   'https://ethereum-rpc.publicnode.com',
-  'https://cloudflare-eth.com'
+  'https://cloudflare-eth.com',
+  'https://eth.drpc.org',
+  'https://gateway.tenderly.co/public/mainnet',
+  'https://api.securerpc.com/mainnet'
 ];
 
 interface TransactionData {
@@ -163,11 +166,23 @@ export default function App() {
       setRetryCount(0);
     } catch (err: any) {
       console.error('Failed to fetch node data:', err);
+      
+      const isRateLimited = 
+        err?.message?.includes('429') || 
+        err?.message?.toLowerCase().includes('rate-limited') ||
+        err?.error?.code === 429;
+
+      if (isRateLimited) {
+        setConnectionError(`Rate Limit detected. Switching nodes...`);
+        rotateRpc();
+        return;
+      }
+
       setRetryCount(prev => prev + 1);
       
       if (retryCount >= 2) {
         rotateRpc();
-        setConnectionError(`Failover triggered: Switching to secondary endpoint...`);
+        setConnectionError(`Network threshold breached. Rotating endpoint...`);
       } else {
         setConnectionError('Network sync intermittent. Retrying...');
       }
@@ -245,7 +260,7 @@ export default function App() {
 
   useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchData, 12000); // Poll every 12 seconds
+    const interval = setInterval(fetchData, 15000); // Increased interval to 15s to respect public RPC limits
     return () => clearInterval(interval);
   }, [provider]);
 
