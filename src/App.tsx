@@ -98,12 +98,20 @@ export default function App() {
   });
 
   const nodeStatus = useMemo(() => {
-    const isCritical = metrics.peers < 15;
+    const isCritical = metrics.peers < 15 || parseFloat(healthData.syncLag) > 0.5 || parseFloat(healthData.propagation) > 50;
     const isWarning = metrics.peers < 40 || parseFloat(healthData.syncLag) > 0.2 || parseFloat(healthData.propagation) > 30;
     
     if (isCritical) return 'critical';
     if (isWarning) return 'warning';
     return 'healthy';
+  }, [metrics.peers, healthData.syncLag, healthData.propagation]);
+
+  const activeAlerts = useMemo(() => {
+    const alerts: string[] = [];
+    if (metrics.peers < 15) alerts.push('PEER_ISOLATION_CRITICAL');
+    if (parseFloat(healthData.syncLag) > 0.5) alerts.push('CHAIN_LATENCY_BREACH');
+    if (parseFloat(healthData.propagation) > 50) alerts.push('PROPAGATION_STALL');
+    return alerts;
   }, [metrics.peers, healthData.syncLag, healthData.propagation]);
 
   const provider = useMemo(() => new ethers.JsonRpcProvider(RPC_URLS[rpcIndex]), [rpcIndex]);
@@ -447,11 +455,42 @@ export default function App() {
 
             {/* Right Col: Health, Feed & Security */}
             <div className="col-span-12 lg:col-span-3 flex flex-col gap-6">
-              <div className="bg-card p-6 rounded-none flex flex-col">
-                <div className="flex items-center gap-2 mb-6">
-                  <div className="accent-bar"></div>
-                  <span className="text-[11px] uppercase tracking-widest font-extrabold text-white/90">Health_Diagnostics</span>
+              <div className="bg-card p-6 rounded-none flex flex-col relative overflow-hidden">
+                {activeAlerts.length > 0 && (
+                  <div className="absolute top-0 right-0 p-1 bg-rose-500/10 border-b border-l border-rose-500/20">
+                    <AlertTriangle size={12} className="text-rose-500 animate-pulse" />
+                  </div>
+                )}
+                <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center gap-2">
+                    <div className="accent-bar"></div>
+                    <span className="text-[11px] uppercase tracking-widest font-extrabold text-white/90">Health_Diagnostics</span>
+                  </div>
+                  {activeAlerts.length > 0 && (
+                    <span className="text-[9px] font-mono text-rose-500 animate-pulse font-bold">ALARM_ACTIVE</span>
+                  )}
                 </div>
+
+                <AnimatePresence>
+                  {activeAlerts.length > 0 && (
+                    <motion.div 
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      className="mb-6 space-y-2 overflow-hidden"
+                    >
+                      {activeAlerts.map(alert => (
+                        <div key={alert} className="flex items-center gap-2 bg-rose-500/20 border border-rose-500/30 p-2 rounded-none">
+                          <XCircle size={12} className="text-rose-500 shrink-0" />
+                          <span className="text-[9px] font-mono font-bold text-rose-500 uppercase tracking-tighter truncate">
+                            {alert.replace(/_/g, ' ')}
+                          </span>
+                        </div>
+                      ))}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
                 <div className="space-y-4">
                   <HealthUnit 
                     label="P2P_PEERS" 
@@ -462,13 +501,13 @@ export default function App() {
                   <HealthUnit 
                     label="SYNC_LATENCY" 
                     value={`${healthData.syncLag} LAG`} 
-                    status={parseFloat(healthData.syncLag) < 0.2 ? 'healthy' : 'warning'} 
+                    status={parseFloat(healthData.syncLag) > 0.5 ? 'critical' : parseFloat(healthData.syncLag) > 0.2 ? 'warning' : 'healthy'} 
                     icon={<Zap size={14} />}
                   />
                   <HealthUnit 
                     label="PROPAGATION" 
                     value={`${healthData.propagation} AVG`} 
-                    status={parseFloat(healthData.propagation) < 30 ? 'healthy' : 'warning'} 
+                    status={parseFloat(healthData.propagation) > 50 ? 'critical' : parseFloat(healthData.propagation) > 30 ? 'warning' : 'healthy'} 
                     icon={<LatencyIcon size={14} />}
                   />
                 </div>
@@ -699,7 +738,7 @@ function HealthUnit({ label, value, status, icon }: { label: string, value: stri
   const { color, bg, border, Icon } = statusConfig[status];
 
   return (
-    <div className={`p-4 border ${border} ${bg} flex items-center justify-between group transition-all duration-300`}>
+    <div className={`p-4 border ${border} ${bg} flex items-center justify-between group transition-all duration-300 ${status === 'critical' ? 'animate-pulse' : ''}`}>
       <div className="flex items-center gap-3">
         <div className={`p-2 bg-black/40 text-white/30 group-hover:${color} transition-colors`}>
           {icon}
