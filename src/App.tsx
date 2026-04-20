@@ -39,6 +39,7 @@ import {
   Tooltip, 
   ResponsiveContainer 
 } from 'recharts';
+import { TransactionGraph } from './components/TransactionGraph';
 
 // RPC Providers - Using a more reliable list of public endpoints
 const RPC_URLS = [
@@ -96,6 +97,7 @@ export default function App() {
     propagation: '12.4ms',
     consensus: 'REACHED'
   });
+  const [modalView, setModalView] = useState<'list' | 'graph'>('list');
 
   const nodeStatus = useMemo(() => {
     const isCritical = metrics.peers < 15 || parseFloat(healthData.syncLag) > 0.5 || parseFloat(healthData.propagation) > 50;
@@ -661,11 +663,27 @@ export default function App() {
                   {/* Right Column: Transactions */}
                   <div className="col-span-12 md:col-span-8 flex flex-col h-full overflow-hidden">
                     <div className="flex items-center justify-between mb-4">
-                      <span className="text-[11px] uppercase tracking-widest font-extrabold text-white/90">Propagating_Payloads</span>
+                      <div className="flex items-center gap-4">
+                        <span className="text-[11px] uppercase tracking-widest font-extrabold text-white/90">Propagating_Payloads</span>
+                        <div className="flex border border-white/10 p-0.5 bg-black/40">
+                          <button 
+                            onClick={() => setModalView('list')}
+                            className={`px-2 py-1 text-[8px] font-mono tracking-widest uppercase transition-colors ${modalView === 'list' ? 'bg-eth-blue text-black' : 'text-white/40 hover:text-white'}`}
+                          >
+                            List
+                          </button>
+                          <button 
+                            onClick={() => setModalView('graph')}
+                            className={`px-2 py-1 text-[8px] font-mono tracking-widest uppercase transition-colors ${modalView === 'graph' ? 'bg-eth-blue text-black' : 'text-white/40 hover:text-white'}`}
+                          >
+                            Graph
+                          </button>
+                        </div>
+                      </div>
                       {isModalLoading && <div className="text-[10px] font-mono text-eth-blue animate-pulse">FETCHING_RECEIPTS...</div>}
                     </div>
 
-                    <div className="flex-1 bg-black border border-white/5 overflow-y-auto">
+                    <div className="flex-1 bg-black border border-white/5 overflow-hidden">
                       {isModalLoading ? (
                         <div className="h-full flex items-center justify-center p-12">
                           <div className="flex flex-col items-center gap-4">
@@ -677,8 +695,12 @@ export default function App() {
                         <div className="h-full flex items-center justify-center p-12 text-white/20 font-mono text-[10px] uppercase tracking-widest">
                           No transaction payload found
                         </div>
+                      ) : modalView === 'graph' ? (
+                        <div className="h-full p-4">
+                          <TransactionGraph transactions={selectedBlock.transactions} />
+                        </div>
                       ) : (
-                        <div className="flex flex-col">
+                        <div className="flex flex-col h-full overflow-y-auto">
                           {selectedBlock.transactions.map((tx, idx) => (
                             <div key={tx.hash} className="p-4 border-b border-white/5 hover:bg-white/[0.02] transition-colors group">
                               <div className="flex justify-between items-start mb-3">
