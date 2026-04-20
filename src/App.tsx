@@ -114,6 +114,15 @@ export default function App() {
     return alerts;
   }, [metrics.peers, healthData.syncLag, healthData.propagation]);
 
+  const filteredBlocks = useMemo(() => {
+    if (!searchQuery) return blocks;
+    const query = searchQuery.toLowerCase();
+    return blocks.filter(b => 
+      b.number.toString().includes(query) || 
+      b.hash.toLowerCase().includes(query)
+    );
+  }, [blocks, searchQuery]);
+
   const provider = useMemo(() => new ethers.JsonRpcProvider(RPC_URLS[rpcIndex]), [rpcIndex]);
 
   const fetchData = async () => {
@@ -394,7 +403,7 @@ export default function App() {
                   <div className="flex items-center gap-4 relative">
                     <div className="absolute top-1/2 left-0 right-0 h-px bg-white/5 -translate-y-1/2" />
                     <AnimatePresence mode="popLayout">
-                      {blocks.slice().reverse().map((b, i) => (
+                      {filteredBlocks.slice().reverse().map((b, i) => (
                         <motion.div
                           key={b.hash}
                           layout
@@ -430,7 +439,7 @@ export default function App() {
                   <span className="text-[9px] font-mono text-white/20 uppercase tracking-widest">Live Updates</span>
                 </div>
                 <div className="flex-1 overflow-y-auto">
-                  {blocks.map((b) => (
+                  {filteredBlocks.map((b) => (
                     <div key={b.hash} 
                     className="group p-4 border-b border-white/5 hover:bg-white/[0.02] transition-colors cursor-pointer flex items-center justify-between"
                     onClick={() => handleBlockClick(b)}>
@@ -439,7 +448,10 @@ export default function App() {
                           <Box size={14} />
                         </div>
                         <div className="font-mono">
-                          <div className="text-xs font-bold text-white/90 mb-0.5">BLOCK_{b.number}</div>
+                          <div className="text-xs font-bold text-white/90 mb-0.5 group-hover:text-eth-blue transition-colors flex items-center gap-2">
+                            BLOCK_{b.number}
+                            <span className="text-[8px] px-1 border border-eth-blue/30 text-eth-blue opacity-0 group-hover:opacity-100 transition-opacity">INSPECT</span>
+                          </div>
                           <div className="text-[10px] text-white/20 uppercase truncate max-w-[80px] sm:max-w-xs">{b.hash}</div>
                         </div>
                       </div>
