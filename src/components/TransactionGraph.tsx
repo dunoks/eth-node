@@ -86,13 +86,16 @@ export function TransactionGraph({ transactions }: { transactions: Transaction[]
       .join("text")
       .attr("class", "tx-label")
       .attr("fill", "#627EEA")
-      .style("font-size", "7px")
+      .attr("stroke", "#000000")
+      .attr("stroke-width", "0.2px")
+      .style("font-size", "8px")
+      .style("font-weight", "bold")
       .style("font-family", "JetBrains Mono")
       .style("text-anchor", "middle")
       .style("pointer-events", "none")
-      .style("opacity", 0.6)
-      .style("transition", "opacity 0.2s")
-      .text(d => `${d.hash.slice(0, 4)}.. ${d.value}Ξ @ ${parseFloat(d.gasPrice).toFixed(1)}gwei`);
+      .style("opacity", 0.7)
+      .style("transition", "opacity 0.2s, fill 0.2s")
+      .text(d => `${d.hash.slice(0, 4)}.. ${d.value}Ξ @ ${parseFloat(d.gasPrice).toFixed(1)}g`);
 
     // Tooltip definition
     const tooltip = d3.select("body").append("div")
