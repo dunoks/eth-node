@@ -119,7 +119,11 @@ export function TransactionGraph({ transactions }: { transactions: Transaction[]
         // Show tooltip
         tooltip
           .style("visibility", "visible")
-          .html(`ADDR: ${d.id}`);
+      .html(`
+        <div style="margin-bottom: 2px; opacity: 0.5;">ADDRESS_NODE</div>
+        <div style="font-weight: bold; margin-bottom: 4px;">${d.id}</div>
+        <div style="font-size: 8px; opacity: 0.3; border-top: 1px solid rgba(98, 126, 234, 0.2); pt-1;">CURSOR_FOLLOW_ACTIVE</div>
+      `);
 
         // Highlight this node
         d3.select(event.currentTarget).select("circle")
