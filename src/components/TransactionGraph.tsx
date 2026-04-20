@@ -17,6 +17,7 @@ interface Link extends d3.SimulationLinkDatum<Node> {
   source: string;
   target: string;
   value: string;
+  hash: string;
 }
 
 export function TransactionGraph({ transactions }: { transactions: Transaction[] }) {
@@ -37,7 +38,7 @@ export function TransactionGraph({ transactions }: { transactions: Transaction[]
     transactions.forEach(tx => {
       if (!nodesMap.has(tx.from)) nodesMap.set(tx.from, { id: tx.from, type: 'address' });
       if (!nodesMap.has(tx.to)) nodesMap.set(tx.to, { id: tx.to, type: 'address' });
-      links.push({ source: tx.from, target: tx.to, value: tx.value });
+      links.push({ source: tx.from, target: tx.to, value: tx.value, hash: tx.hash });
     });
 
     const nodes = Array.from(nodesMap.values());
@@ -63,8 +64,8 @@ export function TransactionGraph({ transactions }: { transactions: Transaction[]
       .style("stroke", "none");
 
     const simulation = d3.forceSimulation<Node>(nodes)
-      .force("link", d3.forceLink<Node, Link>(links).id(d => d.id).distance(100))
-      .force("charge", d3.forceManyBody().strength(-200))
+      .force("link", d3.forceLink<Node, Link>(links).id(d => d.id).distance(150))
+      .force("charge", d3.forceManyBody().strength(-300))
       .force("center", d3.forceCenter(width / 2, height / 2));
 
     const link = svg.append("g")
@@ -74,6 +75,17 @@ export function TransactionGraph({ transactions }: { transactions: Transaction[]
       .attr("stroke", "rgba(98, 126, 234, 0.2)")
       .attr("stroke-width", 1.5)
       .attr("marker-end", "url(#arrowhead)");
+
+    const linkLabel = svg.append("g")
+      .selectAll("text")
+      .data(links)
+      .join("text")
+      .attr("fill", "#627EEA")
+      .style("font-size", "8px")
+      .style("font-family", "JetBrains Mono")
+      .style("text-anchor", "middle")
+      .style("pointer-events", "none")
+      .text(d => `${d.hash.slice(0, 6)}... (${d.value}Ξ)`);
 
     const node = svg.append("g")
       .selectAll("g")
@@ -104,6 +116,10 @@ export function TransactionGraph({ transactions }: { transactions: Transaction[]
         .attr("y1", d => (d.source as any).y)
         .attr("x2", d => (d.target as any).x)
         .attr("y2", d => (d.target as any).y);
+
+      linkLabel
+        .attr("x", d => ((d.source as any).x + (d.target as any).x) / 2)
+        .attr("y", d => ((d.source as any).y + (d.target as any).y) / 2 - 5);
 
       node
         .attr("transform", d => `translate(${d.x},${d.y})`);
