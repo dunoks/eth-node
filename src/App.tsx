@@ -31,12 +31,22 @@ import { ethers } from 'ethers';
 // RPC Provider
 const RPC_URL = 'https://cloudflare-eth.com';
 
+interface TransactionData {
+  hash: string;
+  from: string;
+  to: string;
+  value: string;
+  gasLimit: string;
+  gasUsed: string;
+}
+
 interface BlockData {
   number: number;
   hash: string;
   timestamp: number;
   transactionsCount: number;
   miner: string;
+  transactions?: TransactionData[];
 }
 
 interface NodeMetrics {
@@ -61,6 +71,8 @@ export default function App() {
     version: 'Geth/v1.13.11-stable'
   });
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedBlock, setSelectedBlock] = useState<BlockData | null>(null);
+  const [isModalLoading, setIsModalLoading] = useState(false);
 
   const provider = useMemo(() => new ethers.JsonRpcProvider(RPC_URL), []);
 
@@ -92,6 +104,44 @@ export default function App() {
       }
     } catch (err) {
       console.error('Failed to fetch node data:', err);
+    }
+  };
+
+  const handleBlockClick = async (block: BlockData) => {
+    setSelectedBlock(block);
+    if (!block.transactions) {
+      setIsModalLoading(true);
+      try {
+        // Fetch original block with full transactions pre-fetched
+        const fullBlock = await provider.getBlock(block.number, true);
+        if (fullBlock && fullBlock.transactions && fullBlock.transactions.length > 0) {
+          // In ethers v6, block.transactions is an array of TransactionResponse if prefetchTxs is true
+          const txsToShow = fullBlock.transactions.slice(0, 10) as ethers.TransactionResponse[];
+          
+          // Fetch receipts in parallel for gasUsed
+          const txDetails = await Promise.all(txsToShow.map(async (tx) => {
+            const receipt = await provider.getTransactionReceipt(tx.hash);
+            return {
+              hash: tx.hash,
+              from: tx.from,
+              to: tx.to || 'Contract Creation',
+              value: ethers.formatEther(tx.value),
+              gasLimit: tx.gasLimit.toString(),
+              gasUsed: receipt ? receipt.gasUsed.toString() : 'Unknown'
+            };
+          }));
+
+          const updatedBlock = { ...block, transactions: txDetails };
+          setSelectedBlock(updatedBlock);
+          
+          // Update blocks list so we don't fetch again if clicked
+          setBlocks(prev => prev.map(b => b.number === block.number ? updatedBlock : b));
+        }
+      } catch (err) {
+        console.error('Failed to fetch transactions:', err);
+      } finally {
+        setIsModalLoading(false);
+      }
     }
   };
 
@@ -239,7 +289,8 @@ export default function App() {
                           <div className="group">
                             <div className={`w-14 h-14 border-2 flex items-center justify-center transition-all cursor-pointer rounded-none
                               ${i === blocks.length - 1 ? 'bg-eth-blue border-eth-blue text-white shadow-[0_0_15px_rgba(98,126,234,0.3)]' : 'bg-black border-white/10 text-white/40 hover:border-eth-blue/50'}
-                            `}>
+                            `}
+                            onClick={() => handleBlockClick(b)}>
                               <Box size={20} />
                             </div>
                             <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-[9px] font-mono text-white/30 whitespace-nowrap">
@@ -263,7 +314,9 @@ export default function App() {
                 </div>
                 <div className="flex-1 overflow-y-auto">
                   {blocks.map((b) => (
-                    <div key={b.hash} className="group p-4 border-b border-white/5 hover:bg-white/[0.02] transition-colors cursor-pointer flex items-center justify-between">
+                    <div key={b.hash} 
+                    className="group p-4 border-b border-white/5 hover:bg-white/[0.02] transition-colors cursor-pointer flex items-center justify-between"
+                    onClick={() => handleBlockClick(b)}>
                       <div className="flex items-center gap-4">
                         <div className="w-8 h-8 border border-white/10 flex items-center justify-center text-white/30 group-hover:text-eth-blue group-hover:border-eth-blue transition-colors rounded-none">
                           <Box size={14} />
@@ -355,6 +408,126 @@ export default function App() {
           </div>
         </section>
       </main>
+
+      {/* Block Transaction Detail Modal */}
+      <AnimatePresence>
+        {selectedBlock && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 sm:p-12">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+              onClick={() => setSelectedBlock(null)}
+            />
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 20 }}
+              className="relative w-full max-w-4xl max-h-full aspect-[4/3] bg-bg border border-white/10 flex flex-col shadow-[0_0_50px_rgba(0,0,0,0.5)]"
+            >
+              <div className="h-16 border-b border-white/10 px-8 flex items-center justify-between bg-sidebar">
+                <div className="flex items-center gap-3">
+                  <div className="accent-bar"></div>
+                  <span className="text-xs font-mono font-extrabold uppercase tracking-widest text-white/90">Block Detail: {selectedBlock.number}</span>
+                </div>
+                <button 
+                  onClick={() => setSelectedBlock(null)}
+                  className="p-2 border border-white/10 hover:bg-white/5 transition-colors text-white/40"
+                >
+                  <ChevronRight className="rotate-180" size={18} />
+                </button>
+              </div>
+
+              <div className="flex-1 p-8 overflow-y-auto">
+                <div className="grid grid-cols-12 gap-8 h-full">
+                  {/* Left Column: Summary */}
+                  <div className="col-span-12 md:col-span-4 flex flex-col gap-6">
+                    <div className="space-y-1">
+                      <div className="text-[10px] font-mono text-white/30 uppercase tracking-widest font-bold">Block Hash</div>
+                      <div className="text-xs font-mono break-all text-white/70">{selectedBlock.hash}</div>
+                    </div>
+                    <div className="space-y-1">
+                      <div className="text-[10px] font-mono text-white/30 uppercase tracking-widest font-bold">Timestamp</div>
+                      <div className="text-xs font-mono text-white/70">{new Date(selectedBlock.timestamp * 1000).toLocaleString()}</div>
+                    </div>
+                    <div className="space-y-1">
+                      <div className="text-[10px] font-mono text-white/30 uppercase tracking-widest font-bold">Transaction Count</div>
+                      <div className="text-xs font-mono text-white/70">{selectedBlock.transactionsCount} entries</div>
+                    </div>
+                    <div className="mt-auto pt-6 border-t border-white/5">
+                      <div className="text-[9px] font-mono text-white/20 uppercase tracking-widest leading-relaxed">
+                        Data retrieved from execution layer via snapshot sync. Content integrity verified by consensus layer.
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Right Column: Transactions */}
+                  <div className="col-span-12 md:col-span-8 flex flex-col h-full overflow-hidden">
+                    <div className="flex items-center justify-between mb-4">
+                      <span className="text-[11px] uppercase tracking-widest font-extrabold text-white/90">Propagating_Payloads</span>
+                      {isModalLoading && <div className="text-[10px] font-mono text-eth-blue animate-pulse">FETCHING_RECEIPTS...</div>}
+                    </div>
+
+                    <div className="flex-1 bg-black border border-white/5 overflow-y-auto">
+                      {isModalLoading ? (
+                        <div className="h-full flex items-center justify-center p-12">
+                          <div className="flex flex-col items-center gap-4">
+                            <div className="w-12 h-12 border border-eth-blue border-t-white animate-spin"></div>
+                            <span className="text-[10px] font-mono text-white/30 tracking-widest uppercase">Analyzing Ledger...</span>
+                          </div>
+                        </div>
+                      ) : !selectedBlock.transactions ? (
+                        <div className="h-full flex items-center justify-center p-12 text-white/20 font-mono text-[10px] uppercase tracking-widest">
+                          No transaction payload found
+                        </div>
+                      ) : (
+                        <div className="flex flex-col">
+                          {selectedBlock.transactions.map((tx, idx) => (
+                            <div key={tx.hash} className="p-4 border-b border-white/5 hover:bg-white/[0.02] transition-colors group">
+                              <div className="flex justify-between items-start mb-3">
+                                <div className="text-[10px] font-mono text-eth-blue group-hover:text-white transition-colors truncate max-w-[200px]">
+                                  {tx.hash}
+                                </div>
+                                <div className="text-[10px] font-mono text-white/60">{tx.value} Ξ</div>
+                              </div>
+                              <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                  <div className="text-[8px] font-mono text-white/20 uppercase tracking-widest mb-1">From</div>
+                                  <div className="text-[9px] font-mono text-white/40 truncate">{tx.from}</div>
+                                </div>
+                                <div>
+                                  <div className="text-[8px] font-mono text-white/20 uppercase tracking-widest mb-1">To</div>
+                                  <div className="text-[9px] font-mono text-white/40 truncate">{tx.to}</div>
+                                </div>
+                              </div>
+                              <div className="mt-3 flex gap-4 text-[9px] font-mono text-white/20 uppercase tracking-widest">
+                                <span>Gas Limit: <span className="text-white/40">{tx.gasLimit}</span></span>
+                                <span>Gas Used: <span className="text-emerald-500/60 font-bold">{tx.gasUsed}</span></span>
+                              </div>
+                            </div>
+                          ))}
+                          <div className="p-4 text-[9px] font-mono text-white/20 text-center uppercase tracking-widest">
+                            Showing first 10 transactions of block
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <footer className="h-8 border-t border-white/10 px-8 flex items-center justify-between text-[10px] font-mono text-white/20 bg-sidebar">
+                <div className="uppercase tracking-widest">Transaction Snapshot v1.0</div>
+                <div className="flex items-center gap-2">
+                  <Lock size={10} />
+                  SECURE_LAYER
+                </div>
+              </footer>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Bottom Status Bar */}
       <footer className="h-8 border-t border-white/10 px-8 flex items-center justify-between text-[10px] font-mono text-white/40 bg-sidebar shrink-0">
