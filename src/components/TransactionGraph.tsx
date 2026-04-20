@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import * as d3 from 'd3';
 
 interface Transaction {
@@ -24,12 +24,29 @@ interface Link extends d3.SimulationLinkDatum<Node> {
 
 export function TransactionGraph({ transactions }: { transactions: Transaction[] }) {
   const svgRef = useRef<SVGSVGElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [dimensions, setDimensions] = useState({ width: 600, height: 400 });
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+
+    const observer = new ResizeObserver((entries) => {
+      if (!entries[0]) return;
+      const { width, height } = entries[0].contentRect;
+      setDimensions({ 
+        width: width || 600, 
+        height: height || 400 
+      });
+    });
+
+    observer.observe(containerRef.current);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     if (!svgRef.current || transactions.length === 0) return;
 
-    const width = 600;
-    const height = 400;
+    const { width, height } = dimensions;
 
     // Clear previous graph
     d3.select(svgRef.current).selectAll("*").remove();
@@ -66,9 +83,10 @@ export function TransactionGraph({ transactions }: { transactions: Transaction[]
       .style("stroke", "none");
 
     const simulation = d3.forceSimulation<Node>(nodes)
-      .force("link", d3.forceLink<Node, Link>(links).id(d => d.id).distance(150))
-      .force("charge", d3.forceManyBody().strength(-300))
-      .force("center", d3.forceCenter(width / 2, height / 2));
+      .force("link", d3.forceLink<Node, Link>(links).id(d => d.id).distance(180))
+      .force("charge", d3.forceManyBody().strength(-500))
+      .force("center", d3.forceCenter(width / 2, height / 2))
+      .force("collide", d3.forceCollide(40));
 
     const link = svg.append("g")
       .selectAll("line")
@@ -280,10 +298,16 @@ export function TransactionGraph({ transactions }: { transactions: Transaction[]
 
       linkLabel
         .attr("x", d => ((d.source as any).x + (d.target as any).x) / 2)
-        .attr("y", d => ((d.source as any).y + (d.target as any).y) / 2 - 5);
+        .attr("y", d => ((d.source as any).y + (d.target as any).y) / 2 - 8);
 
       node
-        .attr("transform", d => `translate(${d.x},${d.y})`);
+        .attr("transform", d => {
+          // Clamp nodes to viewport boundaries
+          const r = 10;
+          d.x = Math.max(r, Math.min(width - r, d.x || 0));
+          d.y = Math.max(r, Math.min(height - r, d.y || 0));
+          return `translate(${d.x},${d.y})`;
+        });
     });
 
     function dragstarted(event: any, d: any) {
@@ -307,10 +331,10 @@ export function TransactionGraph({ transactions }: { transactions: Transaction[]
       simulation.stop();
       tooltip.remove();
     };
-  }, [transactions]);
+  }, [transactions, dimensions]);
 
   return (
-    <div className="w-full h-full bg-black/20 border border-white/5 relative overflow-hidden">
+    <div ref={containerRef} className="w-full h-full bg-black/20 border border-white/5 relative overflow-hidden">
       <svg ref={svgRef} className="w-full h-full" />
       <div className="absolute bottom-2 right-2 text-[8px] font-mono text-white/20 uppercase tracking-widest">
         D3_Force_Layout
