@@ -91,6 +91,7 @@ export default function App() {
   const [isModalLoading, setIsModalLoading] = useState(false);
   const [rpcIndex, setRpcIndex] = useState(0);
   const [connectionError, setConnectionError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
   const [peerHistory, setPeerHistory] = useState<{ time: string, peers: number }[]>([]);
   const [healthData, setHealthData] = useState({
     syncLag: '0.04s',
@@ -127,6 +128,11 @@ export default function App() {
 
   const provider = useMemo(() => new ethers.JsonRpcProvider(RPC_URLS[rpcIndex]), [rpcIndex]);
 
+  const rotateRpc = () => {
+    setRpcIndex((prev) => (prev + 1) % RPC_URLS.length);
+    setRetryCount(0);
+  };
+
   const fetchData = async () => {
     try {
       const blockNumber = await provider.getBlockNumber();
@@ -153,14 +159,16 @@ export default function App() {
         setGasPrice(ethers.formatUnits(feeData.gasPrice, 'gwei'));
       }
       setConnectionError(null);
+      setRetryCount(0);
     } catch (err: any) {
       console.error('Failed to fetch node data:', err);
-      // Logic for automatic RPC rotation if an error occurs
-      if (err?.code === 'UNKNOWN_ERROR' || err?.message?.includes('Cannot fulfill request')) {
-        setRpcIndex((prev) => (prev + 1) % RPC_URLS.length);
-        setConnectionError(`RPC Error: Rotating to endpoint ${rpcIndex + 2}...`);
+      setRetryCount(prev => prev + 1);
+      
+      if (retryCount >= 2) {
+        rotateRpc();
+        setConnectionError(`Failover triggered: Switching to secondary endpoint...`);
       } else {
-        setConnectionError('Network connectivity issue detected.');
+        setConnectionError('Network sync intermittent. Retrying...');
       }
     }
   };
@@ -197,6 +205,8 @@ export default function App() {
         }
       } catch (err) {
         console.error('Failed to fetch transactions:', err);
+        setConnectionError('Query failed. Attempting endpoint rotation.');
+        rotateRpc();
       } finally {
         setIsModalLoading(false);
       }
@@ -262,11 +272,16 @@ export default function App() {
         </div>
 
         <div className="flex items-center gap-6">
-          <div className="flex items-center gap-2">
-            <div className={`w-2 h-2 rounded-full ${connectionError ? 'bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)]' : 'bg-emerald-500 animate-pulse-status'}`}></div>
-            <span className={`text-[10px] uppercase tracking-tighter font-mono ${connectionError ? 'text-amber-500' : 'opacity-60'}`}>
-              {connectionError ? 'RPC_RECONNECTING' : 'Mainnet_Active'}
-            </span>
+          <div className="flex flex-col items-end">
+            <div className="flex items-center gap-2">
+              <div className={`w-2 h-2 rounded-full ${connectionError ? 'bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)]' : 'bg-emerald-500 animate-pulse-status'}`}></div>
+              <span className={`text-[10px] uppercase tracking-tighter font-mono ${connectionError ? 'text-amber-500' : 'opacity-60'}`}>
+                {connectionError ? 'Failover_Active' : 'Sync_Established'}
+              </span>
+            </div>
+            <div className="text-[8px] font-mono opacity-30 uppercase tracking-widest mt-0.5">
+              EP: {new URL(RPC_URLS[rpcIndex]).hostname}
+            </div>
           </div>
           <div className="px-3 py-1 border border-white/20 text-[10px] font-mono hidden sm:block">GAS: {parseFloat(gasPrice).toFixed(1)}GW</div>
           <button className="p-2 border border-white/10 hover:bg-white/5 transition-colors">
