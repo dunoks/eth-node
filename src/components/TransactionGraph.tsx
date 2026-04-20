@@ -22,6 +22,10 @@ interface Link extends d3.SimulationLinkDatum<Node> {
   gasPrice: string;
 }
 
+interface WeightedNode extends Node {
+  weight: number;
+}
+
 export function TransactionGraph({ transactions }: { transactions: Transaction[] }) {
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -51,12 +55,16 @@ export function TransactionGraph({ transactions }: { transactions: Transaction[]
     // Clear previous graph
     d3.select(svgRef.current).selectAll("*").remove();
 
-    const nodesMap = new Map<string, Node>();
+    const nodesMap = new Map<string, WeightedNode>();
     const links: Link[] = [];
 
     transactions.forEach(tx => {
-      if (!nodesMap.has(tx.from)) nodesMap.set(tx.from, { id: tx.from, type: 'address' });
-      if (!nodesMap.has(tx.to)) nodesMap.set(tx.to, { id: tx.to, type: 'address' });
+      if (!nodesMap.has(tx.from)) nodesMap.set(tx.from, { id: tx.from, type: 'address', weight: 0 });
+      if (!nodesMap.has(tx.to)) nodesMap.set(tx.to, { id: tx.to, type: 'address', weight: 0 });
+      
+      nodesMap.get(tx.from)!.weight += 1;
+      nodesMap.get(tx.to)!.weight += 1;
+      
       links.push({ source: tx.from, target: tx.to, value: tx.value, hash: tx.hash, gasPrice: tx.gasPrice });
     });
 
@@ -67,11 +75,20 @@ export function TransactionGraph({ transactions }: { transactions: Transaction[]
       .attr("width", "100%")
       .attr("height", "100%");
 
+    // Scalers
+    const nodeRadiusScale = d3.scaleSqrt()
+      .domain([1, d3.max(nodes, n => n.weight) || 1])
+      .range([6, 14]);
+
+    const linkWidthScale = d3.scaleLinear()
+      .domain([0, d3.max(links, l => parseFloat(l.value)) || 1])
+      .range([1.5, 6]);
+
     // Zoom setup
     const g = svg.append("g");
     
     const zoom = d3.zoom<SVGSVGElement, unknown>()
-      .scaleExtent([0.5, 5])
+      .scaleExtent([0.3, 8])
       .on("zoom", (event) => {
         g.attr("transform", event.transform);
       });
@@ -82,7 +99,7 @@ export function TransactionGraph({ transactions }: { transactions: Transaction[]
     svg.append("defs").append("marker")
       .attr("id", "arrowhead")
       .attr("viewBox", "0 -5 10 10")
-      .attr("refX", 20)
+      .attr("refX", 25)
       .attr("refY", 0)
       .attr("orient", "auto")
       .attr("markerWidth", 6)
@@ -93,19 +110,19 @@ export function TransactionGraph({ transactions }: { transactions: Transaction[]
       .attr("fill", "rgba(98, 126, 234, 0.5)")
       .style("stroke", "none");
 
-    const simulation = d3.forceSimulation<Node>(nodes)
-      .force("link", d3.forceLink<Node, Link>(links).id(d => d.id).distance(180))
-      .force("charge", d3.forceManyBody().strength(-500))
+    const simulation = d3.forceSimulation<WeightedNode>(nodes)
+      .force("link", d3.forceLink<WeightedNode, Link>(links).id(d => d.id).distance(d => 180 + (d.source as any).weight * 2))
+      .force("charge", d3.forceManyBody().strength(d => -600 - ((d as WeightedNode).weight * 20)))
       .force("center", d3.forceCenter(width / 2, height / 2))
-      .force("collide", d3.forceCollide(40));
+      .force("collide", d3.forceCollide(d => nodeRadiusScale((d as WeightedNode).weight) + 30));
 
     const link = g.append("g")
       .selectAll("line")
-      .data(links)
+      .data<Link>(links)
       .join("line")
       .attr("class", "tx-link")
       .attr("stroke", "rgba(98, 126, 234, 0.2)")
-      .attr("stroke-width", 1.5)
+      .attr("stroke-width", (d: Link) => linkWidthScale(parseFloat(d.value)))
       .attr("marker-end", "url(#arrowhead)")
       .style("transition", "stroke 0.2s, stroke-opacity 0.2s")
       .style("cursor", "crosshair")
@@ -129,30 +146,30 @@ export function TransactionGraph({ transactions }: { transactions: Transaction[]
         d3.select(event.currentTarget)
           .transition().duration(200)
           .attr("stroke", "rgba(98, 126, 234, 0.8)")
-          .attr("stroke-width", 3);
+          .attr("stroke-width", linkWidthScale(parseFloat(d.value)) + 2);
       })
       .on("mousemove", (event) => {
         tooltip
           .style("top", (event.pageY - 10) + "px")
           .style("left", (event.pageX + 10) + "px");
       })
-      .on("mouseleave", (event) => {
+      .on("mouseleave", (event, d: any) => {
         tooltip.style("visibility", "hidden");
         d3.select(event.currentTarget)
           .transition().duration(200)
           .attr("stroke", "rgba(98, 126, 234, 0.2)")
-          .attr("stroke-width", 1.5);
+          .attr("stroke-width", linkWidthScale(parseFloat(d.value)));
       });
 
     const linkLabel = g.append("g")
       .selectAll("text")
-      .data(links)
+      .data<Link>(links)
       .join("text")
       .attr("class", "tx-label")
       .attr("fill", "#627EEA")
       .attr("stroke", "#000000")
       .attr("stroke-width", "0.2px")
-      .style("font-size", "8px")
+      .style("font-size", (d: Link) => Math.min(10, 7 + parseFloat(d.value)) + "px")
       .style("font-weight", "bold")
       .style("font-family", "JetBrains Mono")
       .style("text-anchor", "middle")
@@ -212,7 +229,7 @@ export function TransactionGraph({ transactions }: { transactions: Transaction[]
 
     const node = g.append("g")
       .selectAll("g")
-      .data(nodes)
+      .data<WeightedNode>(nodes)
       .join("g")
       .attr("class", "tx-node")
       .style("cursor", "pointer")
@@ -223,19 +240,23 @@ export function TransactionGraph({ transactions }: { transactions: Transaction[]
       .html(`
         <div style="margin-bottom: 2px; opacity: 0.5;">ADDRESS_NODE</div>
         <div style="font-weight: bold; margin-bottom: 4px;">${d.id}</div>
-        <div style="font-size: 8px; opacity: 0.3; border-top: 1px solid rgba(98, 126, 234, 0.2); pt-1;">CURSOR_FOLLOW_ACTIVE</div>
+        <div style="display: flex; justify-content: space-between; gap: 12px; margin-bottom: 2px;">
+          <span style="opacity: 0.6;">CONNECTIONS:</span>
+          <span style="color: #627EEA;">${d.weight}</span>
+        </div>
+        <div style="font-size: 8px; opacity: 0.3; border-top: 1px solid rgba(98, 126, 234, 0.2); pt-1;">DIAGNOSTIC_RADAR_ACTIVE</div>
       `);
 
         // Highlight this node
         d3.select(event.currentTarget).select("circle")
           .transition().duration(200)
-          .attr("r", 9)
+          .attr("r", nodeRadiusScale(d.weight) + 4)
           .attr("fill", "#627EEA");
         
         d3.select(event.currentTarget).select("text")
           .transition().duration(200)
           .attr("fill", "#ffffff")
-          .style("font-size", "11px");
+          .style("font-size", "12px");
 
         // Dim other nodes
         svg.selectAll(".tx-node").filter((n: any) => n.id !== d.id)
@@ -246,7 +267,7 @@ export function TransactionGraph({ transactions }: { transactions: Transaction[]
         svg.selectAll(".tx-link")
           .transition().duration(200)
           .attr("stroke", (l: any) => (l.source.id === d.id || l.target.id === d.id) ? "rgba(98, 126, 234, 0.8)" : "rgba(255, 255, 255, 0.05)")
-          .attr("stroke-width", (l: any) => (l.source.id === d.id || l.target.id === d.id) ? 2.5 : 1);
+          .attr("stroke-width", (l: any) => (l.source.id === d.id || l.target.id === d.id) ? 3 : 1);
 
         svg.selectAll(".tx-label")
           .transition().duration(200)
@@ -257,14 +278,14 @@ export function TransactionGraph({ transactions }: { transactions: Transaction[]
           .style("top", (event.pageY - 10) + "px")
           .style("left", (event.pageX + 10) + "px");
       })
-      .on("mouseleave", (event) => {
+      .on("mouseleave", (event, d: any) => {
         // Hide tooltip
         tooltip.style("visibility", "hidden");
 
         // Reset node
         d3.select(event.currentTarget).select("circle")
           .transition().duration(200)
-          .attr("r", 6)
+          .attr("r", nodeRadiusScale(d.weight))
           .attr("fill", "#050505");
         
         d3.select(event.currentTarget).select("text")
@@ -277,16 +298,16 @@ export function TransactionGraph({ transactions }: { transactions: Transaction[]
         svg.selectAll(".tx-link")
           .transition().duration(200)
           .attr("stroke", "rgba(98, 126, 234, 0.2)")
-          .attr("stroke-width", 1.5);
+          .attr("stroke-width", (l: any) => linkWidthScale(parseFloat(l.value)));
         svg.selectAll(".tx-label").transition().duration(200).style("opacity", 0.6);
       })
-      .call(d3.drag<SVGGElement, Node>()
+      .call(d3.drag<SVGGElement, any>()
         .on("start", dragstarted)
         .on("drag", dragged)
         .on("end", dragended) as any);
 
     node.append("circle")
-      .attr("r", 6)
+      .attr("r", (d: WeightedNode) => nodeRadiusScale(d.weight))
       .attr("fill", "#050505")
       .attr("stroke", "#627EEA")
       .attr("stroke-width", 2)
