@@ -27,9 +27,22 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ethers } from 'ethers';
+import { 
+  LineChart, 
+  Line, 
+  XAxis, 
+  YAxis, 
+  Tooltip, 
+  ResponsiveContainer 
+} from 'recharts';
 
-// RPC Provider
-const RPC_URL = 'https://cloudflare-eth.com';
+// RPC Providers - Using a more reliable list of public endpoints
+const RPC_URLS = [
+  'https://eth.llamarpc.com',
+  'https://rpc.ankr.com/eth',
+  'https://ethereum-rpc.publicnode.com',
+  'https://cloudflare-eth.com'
+];
 
 interface TransactionData {
   hash: string;
@@ -61,8 +74,6 @@ export default function App() {
   const [latestBlock, setLatestBlock] = useState<BlockData | null>(null);
   const [blocks, setBlocks] = useState<BlockData[]>([]);
   const [gasPrice, setGasPrice] = useState<string>('0');
-  const [ethPrice, setEthPrice] = useState<string>('0'); // Simulated or from API
-  const [isSyncing, setIsSyncing] = useState(false);
   const [metrics, setMetrics] = useState<NodeMetrics>({
     peers: 48,
     cpuUsage: 12.4,
@@ -73,8 +84,11 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedBlock, setSelectedBlock] = useState<BlockData | null>(null);
   const [isModalLoading, setIsModalLoading] = useState(false);
+  const [rpcIndex, setRpcIndex] = useState(0);
+  const [connectionError, setConnectionError] = useState<string | null>(null);
+  const [peerHistory, setPeerHistory] = useState<{ time: string, peers: number }[]>([]);
 
-  const provider = useMemo(() => new ethers.JsonRpcProvider(RPC_URL), []);
+  const provider = useMemo(() => new ethers.JsonRpcProvider(RPC_URLS[rpcIndex]), [rpcIndex]);
 
   const fetchData = async () => {
     try {
@@ -92,7 +106,6 @@ export default function App() {
 
         setLatestBlock(newBlockData);
         setBlocks(prev => {
-          // Only add if not already present
           if (prev.length > 0 && prev[0].number === newBlockData.number) return prev;
           return [newBlockData, ...prev].slice(0, 5);
         });
@@ -102,8 +115,16 @@ export default function App() {
       if (feeData.gasPrice) {
         setGasPrice(ethers.formatUnits(feeData.gasPrice, 'gwei'));
       }
-    } catch (err) {
+      setConnectionError(null);
+    } catch (err: any) {
       console.error('Failed to fetch node data:', err);
+      // Logic for automatic RPC rotation if an error occurs
+      if (err?.code === 'UNKNOWN_ERROR' || err?.message?.includes('Cannot fulfill request')) {
+        setRpcIndex((prev) => (prev + 1) % RPC_URLS.length);
+        setConnectionError(`RPC Error: Rotating to endpoint ${rpcIndex + 2}...`);
+      } else {
+        setConnectionError('Network connectivity issue detected.');
+      }
     }
   };
 
@@ -154,12 +175,25 @@ export default function App() {
   // Simulate evolving metrics
   useEffect(() => {
     const interval = setInterval(() => {
-      setMetrics(prev => ({
-        ...prev,
-        cpuUsage: Math.max(5, Math.min(45, prev.cpuUsage + (Math.random() - 0.5) * 5)),
-        memoryUsage: Math.max(3.8, Math.min(5.2, prev.memoryUsage + (Math.random() - 0.5) * 0.1)),
-        peers: Math.max(30, Math.min(65, prev.peers + (Math.random() > 0.5 ? 1 : -1)))
-      }));
+      setMetrics(prev => {
+        const nextPeers = Math.max(30, Math.min(65, prev.peers + (Math.random() > 0.5 ? 1 : -1)));
+        
+        // Add to history
+        const now = new Date();
+        const timeStr = `${now.getHours()}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
+        
+        setPeerHistory(h => [
+          ...h.slice(-19),
+          { time: timeStr, peers: nextPeers }
+        ]);
+
+        return {
+          ...prev,
+          cpuUsage: Math.max(5, Math.min(45, prev.cpuUsage + (Math.random() - 0.5) * 5)),
+          memoryUsage: Math.max(3.8, Math.min(5.2, prev.memoryUsage + (Math.random() - 0.5) * 0.1)),
+          peers: nextPeers
+        };
+      });
     }, 3000);
     return () => clearInterval(interval);
   }, []);
@@ -186,8 +220,10 @@ export default function App() {
 
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse-status"></div>
-            <span className="text-[10px] uppercase tracking-tighter opacity-60 font-mono">Mainnet_Active</span>
+            <div className={`w-2 h-2 rounded-full ${connectionError ? 'bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)]' : 'bg-emerald-500 animate-pulse-status'}`}></div>
+            <span className={`text-[10px] uppercase tracking-tighter font-mono ${connectionError ? 'text-amber-500' : 'opacity-60'}`}>
+              {connectionError ? 'RPC_RECONNECTING' : 'Mainnet_Active'}
+            </span>
           </div>
           <div className="px-3 py-1 border border-white/20 text-[10px] font-mono hidden sm:block">GAS: {parseFloat(gasPrice).toFixed(1)}GW</div>
           <button className="p-2 border border-white/10 hover:bg-white/5 transition-colors">
@@ -247,7 +283,42 @@ export default function App() {
                 <div className="space-y-6">
                   <MetricRow label="CPU_LOAD" value={`${metrics.cpuUsage.toFixed(1)}%`} progress={metrics.cpuUsage / 100} />
                   <MetricRow label="MEM_USED" value={`${metrics.memoryUsage.toFixed(1)} GB`} progress={metrics.memoryUsage / 8} />
-                  <MetricRow label="PEERS_ACTIVE" value={metrics.peers.toString()} progress={metrics.peers / 100} />
+                  <div className="space-y-4">
+                    <MetricRow label="PEERS_ACTIVE" value={metrics.peers.toString()} progress={metrics.peers / 100} />
+                    
+                    <div className="h-32 w-full mt-4 bg-black/40 border border-white/5 p-2 rounded-none">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={peerHistory}>
+                          <XAxis dataKey="time" hide />
+                          <YAxis domain={['auto', 'auto']} hide />
+                          <Tooltip 
+                            contentStyle={{ 
+                              backgroundColor: '#0A0A0A', 
+                              border: '1px solid rgba(255,255,255,0.1)',
+                              borderRadius: '0',
+                              fontSize: '10px',
+                              fontFamily: 'JetBrains Mono',
+                              textTransform: 'uppercase'
+                            }}
+                            itemStyle={{ color: '#627EEA' }}
+                            labelStyle={{ color: 'rgba(255,255,255,0.4)' }}
+                          />
+                          <Line 
+                            type="monotone" 
+                            dataKey="peers" 
+                            stroke="#627EEA" 
+                            strokeWidth={1.5} 
+                            dot={false}
+                            animationDuration={1000}
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                    <div className="flex justify-between text-[8px] font-mono text-white/20 uppercase tracking-widest px-1">
+                      <span>Historical_peers</span>
+                      <span>Realtime_Stream</span>
+                    </div>
+                  </div>
                 </div>
               </div>
 
