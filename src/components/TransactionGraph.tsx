@@ -6,6 +6,7 @@ interface Transaction {
   from: string;
   to: string;
   value: string;
+  gasPrice: string;
 }
 
 interface Node extends d3.SimulationNodeDatum {
@@ -18,6 +19,7 @@ interface Link extends d3.SimulationLinkDatum<Node> {
   target: string;
   value: string;
   hash: string;
+  gasPrice: string;
 }
 
 export function TransactionGraph({ transactions }: { transactions: Transaction[] }) {
@@ -38,7 +40,7 @@ export function TransactionGraph({ transactions }: { transactions: Transaction[]
     transactions.forEach(tx => {
       if (!nodesMap.has(tx.from)) nodesMap.set(tx.from, { id: tx.from, type: 'address' });
       if (!nodesMap.has(tx.to)) nodesMap.set(tx.to, { id: tx.to, type: 'address' });
-      links.push({ source: tx.from, target: tx.to, value: tx.value, hash: tx.hash });
+      links.push({ source: tx.from, target: tx.to, value: tx.value, hash: tx.hash, gasPrice: tx.gasPrice });
     });
 
     const nodes = Array.from(nodesMap.values());
@@ -84,13 +86,13 @@ export function TransactionGraph({ transactions }: { transactions: Transaction[]
       .join("text")
       .attr("class", "tx-label")
       .attr("fill", "#627EEA")
-      .style("font-size", "8px")
+      .style("font-size", "7px")
       .style("font-family", "JetBrains Mono")
       .style("text-anchor", "middle")
       .style("pointer-events", "none")
       .style("opacity", 0.6)
       .style("transition", "opacity 0.2s")
-      .text(d => `${d.hash.slice(0, 6)}... (${d.value}Ξ)`);
+      .text(d => `${d.hash.slice(0, 4)}.. ${d.value}Ξ @ ${parseFloat(d.gasPrice).toFixed(1)}gwei`);
 
     const node = svg.append("g")
       .selectAll("g")

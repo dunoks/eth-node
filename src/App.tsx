@@ -59,6 +59,7 @@ interface TransactionData {
   value: string;
   gasLimit: string;
   gasUsed: string;
+  gasPrice: string;
 }
 
 interface BlockData {
@@ -209,7 +210,8 @@ export default function App() {
               to: tx.to || 'Contract Creation',
               value: ethers.formatEther(tx.value),
               gasLimit: tx.gasLimit.toString(),
-              gasUsed: receipt ? receipt.gasUsed.toString() : 'Unknown'
+              gasUsed: receipt ? receipt.gasUsed.toString() : 'Unknown',
+              gasPrice: tx.gasPrice ? ethers.formatUnits(tx.gasPrice, 'gwei') : '0'
             };
           }));
 
