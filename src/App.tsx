@@ -23,7 +23,11 @@ import {
   ChevronRight,
   Clock,
   ExternalLink,
-  ChevronDown
+  ChevronDown,
+  CheckCircle2,
+  AlertTriangle,
+  XCircle,
+  Activity as LatencyIcon
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ethers } from 'ethers';
@@ -87,6 +91,11 @@ export default function App() {
   const [rpcIndex, setRpcIndex] = useState(0);
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [peerHistory, setPeerHistory] = useState<{ time: string, peers: number }[]>([]);
+  const [healthData, setHealthData] = useState({
+    syncLag: '0.04s',
+    propagation: '12.4ms',
+    consensus: 'REACHED'
+  });
 
   const provider = useMemo(() => new ethers.JsonRpcProvider(RPC_URLS[rpcIndex]), [rpcIndex]);
 
@@ -186,6 +195,12 @@ export default function App() {
           ...h.slice(-19),
           { time: timeStr, peers: nextPeers }
         ]);
+
+        setHealthData({
+          syncLag: (Math.random() * 0.1).toFixed(2) + 's',
+          propagation: (10 + Math.random() * 50).toFixed(1) + 'ms',
+          consensus: Math.random() > 0.05 ? 'REACHED' : 'VAL_SYNC'
+        });
 
         return {
           ...prev,
@@ -407,8 +422,44 @@ export default function App() {
               </div>
             </div>
 
-            {/* Right Col: Feed & Security */}
+            {/* Right Col: Health, Feed & Security */}
             <div className="col-span-12 lg:col-span-3 flex flex-col gap-6">
+              <div className="bg-card p-6 rounded-none flex flex-col">
+                <div className="flex items-center gap-2 mb-6">
+                  <div className="accent-bar"></div>
+                  <span className="text-[11px] uppercase tracking-widest font-extrabold text-white/90">Health_Diagnostics</span>
+                </div>
+                <div className="space-y-4">
+                  <HealthUnit 
+                    label="P2P_PEERS" 
+                    value={`${metrics.peers} ATTACHED`} 
+                    status={metrics.peers > 40 ? 'healthy' : metrics.peers > 15 ? 'warning' : 'critical'} 
+                    icon={<Globe size={14} />}
+                  />
+                  <HealthUnit 
+                    label="SYNC_LATENCY" 
+                    value={`${healthData.syncLag} LAG`} 
+                    status={parseFloat(healthData.syncLag) < 0.2 ? 'healthy' : 'warning'} 
+                    icon={<Zap size={14} />}
+                  />
+                  <HealthUnit 
+                    label="PROPAGATION" 
+                    value={`${healthData.propagation} AVG`} 
+                    status={parseFloat(healthData.propagation) < 30 ? 'healthy' : 'warning'} 
+                    icon={<LatencyIcon size={14} />}
+                  />
+                </div>
+                <div className="mt-8 pt-6 border-t border-white/5">
+                  <div className="flex items-center justify-between text-[10px] font-mono mb-2">
+                    <span className="text-white/30 uppercase tracking-widest">Global_Consensus</span>
+                    <span className={`font-bold ${healthData.consensus === 'REACHED' ? 'text-emerald-500' : 'text-amber-500 animate-pulse'}`}>{healthData.consensus}</span>
+                  </div>
+                  <div className="h-1 w-full bg-white/5">
+                    <div className={`h-full bg-emerald-500/50 transition-all duration-1000 ${healthData.consensus === 'REACHED' ? 'w-full' : 'w-2/3'}`}></div>
+                  </div>
+                </div>
+              </div>
+
               <div className="bg-card p-6 rounded-none flex flex-col gap-4">
                 <div className="flex items-center gap-2 mb-2">
                   <div className="accent-bar"></div>
@@ -611,6 +662,31 @@ export default function App() {
           <div className="w-3 h-3 bg-white/10"></div>
         </div>
       </footer>
+    </div>
+  );
+}
+
+function HealthUnit({ label, value, status, icon }: { label: string, value: string, status: 'healthy' | 'warning' | 'critical', icon: React.ReactNode }) {
+  const statusConfig = {
+    healthy: { color: 'text-emerald-500', bg: 'bg-emerald-500/10', border: 'border-emerald-500/20', Icon: CheckCircle2 },
+    warning: { color: 'text-amber-500', bg: 'bg-amber-500/10', border: 'border-amber-500/20', Icon: AlertTriangle },
+    critical: { color: 'text-rose-500', bg: 'bg-rose-500/10', border: 'border-rose-500/20', Icon: XCircle }
+  };
+
+  const { color, bg, border, Icon } = statusConfig[status];
+
+  return (
+    <div className={`p-4 border ${border} ${bg} flex items-center justify-between group transition-all duration-300`}>
+      <div className="flex items-center gap-3">
+        <div className={`p-2 bg-black/40 text-white/30 group-hover:${color} transition-colors`}>
+          {icon}
+        </div>
+        <div>
+          <div className="text-[9px] font-mono text-white/30 uppercase tracking-tight mb-0.5">{label}</div>
+          <div className="text-[11px] font-mono font-bold text-white/80 uppercase">{value}</div>
+        </div>
+      </div>
+      <Icon size={14} className={color} />
     </div>
   );
 }
